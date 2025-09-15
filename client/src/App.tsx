@@ -1,345 +1,512 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { trpc } from '@/utils/trpc';
-import { FamilyTreeNetwork } from './components/FamilyTreeNetwork';
-import { FamilyMemberDetails } from './components/FamilyMemberDetails';
-import { AddMemberDialog } from './components/AddMemberDialog';
-import { DemoNotice } from './components/DemoNotice';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Users, TreePine } from 'lucide-react';
-import type { FamilyTreeNetwork as FamilyTreeNetworkType, FamilyMemberWithRelationships, FamilyMember } from '../../server/src/schema';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { trpc } from '@/utils/trpc';
+import { useState, useEffect, useCallback } from 'react';
+import type { 
+  FamilyMember, 
+  CreateFamilyMemberInput, 
+  CreateMarriageInput, 
+  CreateParentChildInput,
+  Marriage,
+  ParentChild
+} from '../../server/src/schema';
 
 function App() {
-  const [networkData, setNetworkData] = useState<FamilyTreeNetworkType | null>(null);
-  const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
-  const [selectedMemberDetails, setSelectedMemberDetails] = useState<FamilyMemberWithRelationships | null>(null);
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [marriages, setMarriages] = useState<Marriage[]>([]);
+  const [parentChildRelations, setParentChildRelations] = useState<ParentChild[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
 
-  // Load family tree network data
-  const loadNetworkData = useCallback(async () => {
+  // Form states
+  const [memberFormData, setMemberFormData] = useState<CreateFamilyMemberInput>({
+    first_name: '',
+    last_name: '',
+    birth_date: null,
+    death_date: null,
+    picture_url: null
+  });
+
+  const [marriageFormData, setMarriageFormData] = useState<CreateMarriageInput>({
+    person1_id: 0,
+    person2_id: 0,
+    marriage_date: null,
+    divorce_date: null
+  });
+
+  const [parentChildFormData, setParentChildFormData] = useState<CreateParentChildInput>({
+    parent_id: 0,
+    child_id: 0
+  });
+
+  // Dialog states
+  const [showMemberDialog, setShowMemberDialog] = useState(false);
+  const [showMarriageDialog, setShowMarriageDialog] = useState(false);
+  const [showParentChildDialog, setShowParentChildDialog] = useState(false);
+
+  const loadFamilyTreeData = useCallback(async () => {
     try {
-      setIsLoading(true);
-      const data = await trpc.getFamilyTreeNetwork.query();
-      setNetworkData(data);
+      const result = await trpc.getFamilyTreeNetwork.query();
+      setFamilyMembers(result.members);
+      setMarriages(result.marriages);
+      setParentChildRelations(result.parentChildRelations);
     } catch (error) {
-      console.error('Failed to load family tree network:', error);
+      console.error('Failed to load family tree data:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFamilyTreeData();
+  }, [loadFamilyTreeData]);
+
+  const handleCreateMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const response = await trpc.createFamilyMember.mutate(memberFormData);
+      setFamilyMembers((prev: FamilyMember[]) => [...prev, response]);
+      setMemberFormData({
+        first_name: '',
+        last_name: '',
+        birth_date: null,
+        death_date: null,
+        picture_url: null
+      });
+      setShowMemberDialog(false);
+    } catch (error) {
+      console.error('Failed to create family member:', error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  };
 
-  const hasMembers = networkData && networkData.members.length > 0;
-
-  // Demo data for when no real data is available
-  const demoNetworkData: FamilyTreeNetworkType = useMemo(() => ({
-    members: [
-      {
-        id: 1,
-        first_name: 'John',
-        last_name: 'Smith',
-        birth_date: new Date('1950-05-15'),
-        death_date: null,
-        picture_url: null,
-        created_at: new Date()
-      },
-      {
-        id: 2,
-        first_name: 'Mary',
-        last_name: 'Smith',
-        birth_date: new Date('1952-08-22'),
-        death_date: null,
-        picture_url: null,
-        created_at: new Date()
-      },
-      {
-        id: 3,
-        first_name: 'Sarah',
-        last_name: 'Johnson',
-        birth_date: new Date('1975-03-10'),
-        death_date: null,
-        picture_url: null,
-        created_at: new Date()
-      },
-      {
-        id: 4,
-        first_name: 'Michael',
-        last_name: 'Smith',
-        birth_date: new Date('1978-11-05'),
-        death_date: null,
-        picture_url: null,
-        created_at: new Date()
-      }
-    ],
-    marriages: [
-      {
-        id: 1,
-        person1_id: 1,
-        person2_id: 2,
-        marriage_date: new Date('1973-06-20'),
-        divorce_date: null,
-        created_at: new Date()
-      }
-    ],
-    parentChildRelations: [
-      {
-        id: 1,
-        parent_id: 1,
-        child_id: 3,
-        created_at: new Date()
-      },
-      {
-        id: 2,
-        parent_id: 2,
-        child_id: 3,
-        created_at: new Date()
-      },
-      {
-        id: 3,
-        parent_id: 1,
-        child_id: 4,
-        created_at: new Date()
-      },
-      {
-        id: 4,
-        parent_id: 2,
-        child_id: 4,
-        created_at: new Date()
-      }
-    ]
-  }), []);
-
-  const displayData = hasMembers ? networkData : demoNetworkData;
-
-  // Load selected member details
-  const loadMemberDetails = useCallback(async (memberId: number) => {
+  const handleCreateMarriage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (marriageFormData.person1_id === 0 || marriageFormData.person2_id === 0) {
+      alert('Please select both family members for the marriage');
+      return;
+    }
+    setIsLoading(true);
     try {
-      const details = await trpc.getFamilyMemberDetails.query({ memberId });
-      if (details) {
-        setSelectedMemberDetails(details);
-      } else if (!hasMembers) {
-        // Create demo details for demo mode
-        const demoMember = demoNetworkData.members.find(m => m.id === memberId);
-        if (demoMember) {
-          const demoDetails: FamilyMemberWithRelationships = {
-            member: demoMember,
-            parents: demoNetworkData.parentChildRelations
-              .filter(rel => rel.child_id === memberId)
-              .map(rel => demoNetworkData.members.find(m => m.id === rel.parent_id))
-              .filter(Boolean) as FamilyMember[],
-            children: demoNetworkData.parentChildRelations
-              .filter(rel => rel.parent_id === memberId)
-              .map(rel => demoNetworkData.members.find(m => m.id === rel.child_id))
-              .filter(Boolean) as FamilyMember[],
-            spouses: demoNetworkData.marriages
-              .filter(marriage => marriage.person1_id === memberId || marriage.person2_id === memberId)
-              .map(marriage => {
-                const spouseId = marriage.person1_id === memberId ? marriage.person2_id : marriage.person1_id;
-                const spouse = demoNetworkData.members.find(m => m.id === spouseId);
-                return spouse ? { spouse, marriage } : null;
-              })
-              .filter(Boolean) as { spouse: FamilyMember; marriage: typeof demoNetworkData.marriages[0] }[]
-          };
-          setSelectedMemberDetails(demoDetails);
-        }
-      } else {
-        setSelectedMemberDetails(null);
-      }
+      const response = await trpc.createMarriage.mutate(marriageFormData);
+      setMarriages((prev: Marriage[]) => [...prev, response]);
+      setMarriageFormData({
+        person1_id: 0,
+        person2_id: 0,
+        marriage_date: null,
+        divorce_date: null
+      });
+      setShowMarriageDialog(false);
     } catch (error) {
-      console.error('Failed to load member details:', error);
-      setSelectedMemberDetails(null);
+      console.error('Failed to create marriage:', error);
+      alert('Failed to create marriage. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-  }, [hasMembers, demoNetworkData]);
+  };
 
-  useEffect(() => {
-    loadNetworkData();
-  }, [loadNetworkData]);
-
-  useEffect(() => {
-    if (selectedMemberId) {
-      loadMemberDetails(selectedMemberId);
-    } else {
-      setSelectedMemberDetails(null);
+  const handleCreateParentChildRelation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (parentChildFormData.parent_id === 0 || parentChildFormData.child_id === 0) {
+      alert('Please select both parent and child for the relationship');
+      return;
     }
-  }, [selectedMemberId, loadMemberDetails]);
+    setIsLoading(true);
+    try {
+      const response = await trpc.createParentChildRelation.mutate(parentChildFormData);
+      setParentChildRelations((prev: ParentChild[]) => [...prev, response]);
+      setParentChildFormData({
+        parent_id: 0,
+        child_id: 0
+      });
+      setShowParentChildDialog(false);
+    } catch (error) {
+      console.error('Failed to create parent-child relationship:', error);
+      alert('Failed to create parent-child relationship. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const handleMemberSelect = useCallback((memberId: number) => {
-    setSelectedMemberId(memberId);
-  }, []);
+  const getMemberName = (id: number): string => {
+    const member = familyMembers.find(m => m.id === id);
+    return member ? `${member.first_name} ${member.last_name}` : 'Unknown';
+  };
 
-  const handleMemberAdded = useCallback(() => {
-    // Refresh the network data to include the new member
-    loadNetworkData();
-    setIsAddDialogOpen(false);
-  }, [loadNetworkData]);
+  const getMarriagesForMember = (memberId: number): Marriage[] => {
+    return marriages.filter(m => m.person1_id === memberId || m.person2_id === memberId);
+  };
+
+  const getChildrenForMember = (memberId: number): ParentChild[] => {
+    return parentChildRelations.filter(pc => pc.parent_id === memberId);
+  };
+
+  const getParentsForMember = (memberId: number): ParentChild[] => {
+    return parentChildRelations.filter(pc => pc.child_id === memberId);
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
-      {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-purple-200 sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg">
-                <TreePine className="w-6 h-6 text-white" />
+    <div className="container mx-auto p-6 bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold text-indigo-900 mb-2">🌳 Family Tree Explorer</h1>
+        <p className="text-indigo-700">Explore your family connections and relationships</p>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-4 mb-8 justify-center">
+        <Dialog open={showMemberDialog} onOpenChange={setShowMemberDialog}>
+          <DialogTrigger asChild>
+            <Button className="bg-green-600 hover:bg-green-700 text-white">
+              👤 Add Family Member
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add New Family Member</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateMember} className="space-y-4">
+              <div>
+                <Label htmlFor="first_name">First Name</Label>
+                <Input
+                  id="first_name"
+                  value={memberFormData.first_name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setMemberFormData((prev: CreateFamilyMemberInput) => ({ ...prev, first_name: e.target.value }))
+                  }
+                  required
+                />
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
-                  Family Tree Explorer 🌳
-                </h1>
-                <p className="text-sm text-gray-600">Interactive family network visualization</p>
+                <Label htmlFor="last_name">Last Name</Label>
+                <Input
+                  id="last_name"
+                  value={memberFormData.last_name}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setMemberFormData((prev: CreateFamilyMemberInput) => ({ ...prev, last_name: e.target.value }))
+                  }
+                  required
+                />
               </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              {(hasMembers || displayData.members.length > 0) && (
-                <div className="flex items-center space-x-2 text-sm text-gray-600 bg-white/70 px-3 py-1 rounded-full">
-                  <Users className="w-4 h-4" />
-                  <span>
-                    {displayData.members.length} member{displayData.members.length !== 1 ? 's' : ''}
-                    {!hasMembers && ' (demo)'}
-                  </span>
-                </div>
-              )}
-              <Button 
-                onClick={() => setIsAddDialogOpen(true)}
-                className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Member
+              <div>
+                <Label htmlFor="birth_date">Birth Date (Optional)</Label>
+                <Input
+                  id="birth_date"
+                  type="date"
+                  value={memberFormData.birth_date ? memberFormData.birth_date.toISOString().split('T')[0] : ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setMemberFormData((prev: CreateFamilyMemberInput) => ({ 
+                      ...prev, 
+                      birth_date: e.target.value ? new Date(e.target.value) : null 
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="picture_url">Picture URL (Optional)</Label>
+                <Input
+                  id="picture_url"
+                  type="url"
+                  value={memberFormData.picture_url || ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setMemberFormData((prev: CreateFamilyMemberInput) => ({ 
+                      ...prev, 
+                      picture_url: e.target.value || null 
+                    }))
+                  }
+                  placeholder="https://example.com/photo.jpg"
+                />
+              </div>
+              <Button type="submit" disabled={isLoading} className="w-full">
+                {isLoading ? 'Creating...' : 'Add Member'}
               </Button>
-            </div>
-          </div>
-        </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showMarriageDialog} onOpenChange={setShowMarriageDialog}>
+          <DialogTrigger asChild>
+            <Button className="bg-pink-600 hover:bg-pink-700 text-white">
+              💍 Create Marriage
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create Marriage Relationship</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateMarriage} className="space-y-4">
+              <div>
+                <Label>First Person</Label>
+                <Select 
+                  value={marriageFormData.person1_id.toString()} 
+                  onValueChange={(value) => setMarriageFormData(prev => ({ ...prev, person1_id: parseInt(value) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select first person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {familyMembers.map((member: FamilyMember) => (
+                      <SelectItem key={member.id} value={member.id.toString()}>
+                        {member.first_name} {member.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Second Person</Label>
+                <Select 
+                  value={marriageFormData.person2_id.toString()} 
+                  onValueChange={(value) => setMarriageFormData(prev => ({ ...prev, person2_id: parseInt(value) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select second person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {familyMembers.map((member: FamilyMember) => (
+                      <SelectItem key={member.id} value={member.id.toString()}>
+                        {member.first_name} {member.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="marriage_date">Marriage Date (Optional)</Label>
+                <Input
+                  id="marriage_date"
+                  type="date"
+                  value={marriageFormData.marriage_date ? marriageFormData.marriage_date.toISOString().split('T')[0] : ''}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setMarriageFormData((prev: CreateMarriageInput) => ({ 
+                      ...prev, 
+                      marriage_date: e.target.value ? new Date(e.target.value) : null 
+                    }))
+                  }
+                />
+              </div>
+              <Button type="submit" disabled={isLoading} className="w-full">
+                {isLoading ? 'Creating...' : 'Create Marriage'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showParentChildDialog} onOpenChange={setShowParentChildDialog}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+              👨‍👩‍👧‍👦 Add Parent-Child Relationship
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create Parent-Child Relationship</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateParentChildRelation} className="space-y-4">
+              <div>
+                <Label>Parent</Label>
+                <Select 
+                  value={parentChildFormData.parent_id.toString()} 
+                  onValueChange={(value) => setParentChildFormData(prev => ({ ...prev, parent_id: parseInt(value) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select parent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {familyMembers.map((member: FamilyMember) => (
+                      <SelectItem key={member.id} value={member.id.toString()}>
+                        {member.first_name} {member.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Child</Label>
+                <Select 
+                  value={parentChildFormData.child_id.toString()} 
+                  onValueChange={(value) => setParentChildFormData(prev => ({ ...prev, child_id: parseInt(value) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select child" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {familyMembers.map((member: FamilyMember) => (
+                      <SelectItem key={member.id} value={member.id.toString()}>
+                        {member.first_name} {member.last_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" disabled={isLoading} className="w-full">
+                {isLoading ? 'Creating...' : 'Create Relationship'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="container mx-auto px-6 py-8">
-        {/* Demo Notice */}
-        {!hasMembers && !isLoading && (
-          <DemoNotice onAddMember={() => setIsAddDialogOpen(true)} />
-        )}
-        
-        {isLoading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading family tree...</p>
-            </div>
-          </div>
-        ) : !hasMembers ? (
-          <div className="max-w-4xl mx-auto">
-            <Card className="bg-white/80 backdrop-blur-sm border-purple-200">
-              <CardHeader className="text-center pb-6">
-                <div className="p-6 bg-gradient-to-r from-purple-100 to-indigo-100 rounded-full w-32 h-32 mx-auto mb-6 flex items-center justify-center">
-                  <TreePine className="w-16 h-16 text-purple-600" />
-                </div>
-                <CardTitle className="text-3xl text-gray-800 mb-2">Welcome to Family Tree Explorer! 🌳</CardTitle>
-                <p className="text-lg text-gray-600">
-                  Create your interactive family network visualization
-                </p>
-              </CardHeader>
-              <CardContent className="text-center space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                  <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg">
-                    <div className="text-2xl mb-2">👥</div>
-                    <h3 className="font-semibold text-green-800 mb-1">Add Members</h3>
-                    <p className="text-sm text-green-600">Start by adding family members with their photos and dates</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-pink-50 to-rose-50 rounded-lg">
-                    <div className="text-2xl mb-2">💕</div>
-                    <h3 className="font-semibold text-pink-800 mb-1">Connect Relationships</h3>
-                    <p className="text-sm text-pink-600">Link marriages and parent-child relationships</p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg">
-                    <div className="text-2xl mb-2">🌐</div>
-                    <h3 className="font-semibold text-blue-800 mb-1">Explore Network</h3>
-                    <p className="text-sm text-blue-600">Navigate your interactive family bubble network</p>
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <Button 
-                    onClick={() => setIsAddDialogOpen(true)}
-                    size="lg"
-                    className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-lg px-8 py-3"
-                  >
-                    <Plus className="w-5 h-5 mr-2" />
-                    Start Building Your Family Tree
-                  </Button>
-                  <p className="text-sm text-gray-500">
-                    Or check out the demo mode above to see how it works! 👆
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Family Members Grid */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {familyMembers.length === 0 ? (
+          <div className="col-span-full text-center py-12">
+            <p className="text-gray-600 text-lg">No family members yet. Add your first family member above! 👆</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Family Tree Network Visualization */}
-            <div className="lg:col-span-3">
-              <Card className="bg-white/80 backdrop-blur-sm border-purple-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <TreePine className="w-5 h-5 text-purple-600" />
-                      <span>Family Network</span>
-                    </div>
-                    {!hasMembers && (
-                      <div className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
-                        📝 Demo Mode - Add your own family!
-                      </div>
-                    )}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <FamilyTreeNetwork
-                    data={displayData}
-                    selectedMemberId={selectedMemberId}
-                    onMemberSelect={handleMemberSelect}
-                  />
-                </CardContent>
-              </Card>
-            </div>
+          familyMembers.map((member: FamilyMember) => {
+            const memberMarriages = getMarriagesForMember(member.id);
+            const memberChildren = getChildrenForMember(member.id);
+            const memberParents = getParentsForMember(member.id);
 
-            {/* Member Details Panel */}
-            <div className="lg:col-span-1">
-              <Card className="bg-white/80 backdrop-blur-sm border-purple-200 sticky top-24">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Users className="w-5 h-5 text-purple-600" />
-                      <span>Member Details</span>
-                    </div>
-                    {!hasMembers && selectedMemberDetails && (
-                      <div className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                        📋 Sample
+            return (
+              <Card 
+                key={member.id} 
+                className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                  selectedMember?.id === member.id ? 'ring-2 ring-indigo-500 bg-indigo-50' : 'hover:shadow-md'
+                }`}
+                onClick={() => setSelectedMember(selectedMember?.id === member.id ? null : member)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-center space-x-3">
+                    {member.picture_url ? (
+                      <img 
+                        src={member.picture_url} 
+                        alt={`${member.first_name} ${member.last_name}`}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-lg font-semibold">
+                        {member.first_name.charAt(0)}{member.last_name.charAt(0)}
                       </div>
                     )}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {selectedMemberDetails ? (
-                    <FamilyMemberDetails memberDetails={selectedMemberDetails} />
-                  ) : (
-                    <div className="text-center text-gray-500 py-8">
-                      <div className="p-4 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                        <Users className="w-8 h-8 text-gray-400" />
-                      </div>
-                      <p>Click on a family member bubble to view their details and relationships 👆</p>
+                    <div>
+                      <CardTitle className="text-lg">
+                        {member.first_name} {member.last_name}
+                      </CardTitle>
+                      {member.birth_date && (
+                        <p className="text-sm text-gray-600">
+                          Born: {member.birth_date.toLocaleDateString()}
+                        </p>
+                      )}
+                      {member.death_date && (
+                        <p className="text-sm text-gray-600">
+                          Died: {member.death_date.toLocaleDateString()}
+                        </p>
+                      )}
                     </div>
-                  )}
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="pt-0">
+                  <div className="space-y-3">
+                    {/* Parents */}
+                    {memberParents.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-1">Parents:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {memberParents.map((relation: ParentChild) => (
+                            <Badge key={relation.id} variant="outline" className="text-xs">
+                              👨‍👩 {getMemberName(relation.parent_id)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Spouses */}
+                    {memberMarriages.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-1">Married to:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {memberMarriages.map((marriage: Marriage) => {
+                            const spouseId = marriage.person1_id === member.id ? marriage.person2_id : marriage.person1_id;
+                            return (
+                              <Badge key={marriage.id} variant="outline" className="text-xs">
+                                💍 {getMemberName(spouseId)}
+                                {marriage.marriage_date && (
+                                  <span className="ml-1">
+                                    ({marriage.marriage_date.getFullYear()})
+                                  </span>
+                                )}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Children */}
+                    {memberChildren.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-1">Children:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {memberChildren.map((relation: ParentChild) => (
+                            <Badge key={relation.id} variant="outline" className="text-xs">
+                              👶 {getMemberName(relation.child_id)}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {memberParents.length === 0 && memberMarriages.length === 0 && memberChildren.length === 0 && (
+                      <p className="text-sm text-gray-500 italic">No relationships defined yet</p>
+                    )}
+                  </div>
+                  
+                  <p className="text-xs text-gray-400 mt-3">
+                    Added: {member.created_at.toLocaleDateString()}
+                  </p>
                 </CardContent>
               </Card>
-            </div>
-          </div>
+            );
+          })
         )}
       </div>
 
-      {/* Add Member Dialog */}
-      <AddMemberDialog
-        isOpen={isAddDialogOpen}
-        onClose={() => setIsAddDialogOpen(false)}
-        onMemberAdded={handleMemberAdded}
-      />
+      {/* Relationship Summary */}
+      {(marriages.length > 0 || parentChildRelations.length > 0) && (
+        <div className="mt-8 bg-white rounded-lg p-6 shadow-sm">
+          <h2 className="text-xl font-semibold mb-4 text-indigo-900">Family Relationships</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {marriages.length > 0 && (
+              <div>
+                <h3 className="font-medium text-gray-800 mb-2">💍 Marriages ({marriages.length})</h3>
+                <div className="space-y-1">
+                  {marriages.map((marriage: Marriage) => (
+                    <p key={marriage.id} className="text-sm text-gray-600">
+                      {getMemberName(marriage.person1_id)} ↔ {getMemberName(marriage.person2_id)}
+                      {marriage.marriage_date && (
+                        <span className="ml-2 text-xs">
+                          ({marriage.marriage_date.toLocaleDateString()})
+                        </span>
+                      )}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {parentChildRelations.length > 0 && (
+              <div>
+                <h3 className="font-medium text-gray-800 mb-2">👨‍👩‍👧‍👦 Parent-Child ({parentChildRelations.length})</h3>
+                <div className="space-y-1">
+                  {parentChildRelations.map((relation: ParentChild) => (
+                    <p key={relation.id} className="text-sm text-gray-600">
+                      {getMemberName(relation.parent_id)} → {getMemberName(relation.child_id)}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,69 +3,58 @@ import { familyMembersTable } from '../db/schema';
 import { type UpdateFamilyMemberInput, type FamilyMember } from '../schema';
 import { eq } from 'drizzle-orm';
 
-export const updateFamilyMember = async (input: UpdateFamilyMemberInput): Promise<FamilyMember | null> => {
+export const updateFamilyMember = async (input: UpdateFamilyMemberInput): Promise<FamilyMember> => {
   try {
-    const { id, ...updateFields } = input;
+    // Build update object with only defined fields
+    const updateData: any = {};
+    if (input.first_name !== undefined) updateData.first_name = input.first_name;
+    if (input.last_name !== undefined) updateData.last_name = input.last_name;
+    if (input.birth_date !== undefined) {
+      updateData.birth_date = input.birth_date ? input.birth_date.toISOString().split('T')[0] : null;
+    }
+    if (input.death_date !== undefined) {
+      updateData.death_date = input.death_date ? input.death_date.toISOString().split('T')[0] : null;
+    }
+    if (input.picture_url !== undefined) updateData.picture_url = input.picture_url;
 
-    // Check if family member exists
-    const existingMember = await db.select()
-      .from(familyMembersTable)
-      .where(eq(familyMembersTable.id, id))
-      .execute();
-
-    if (existingMember.length === 0) {
-      return null;
-    }
-
-    // Build update object with proper typing and date conversion
-    const fieldsToUpdate: Partial<typeof familyMembersTable.$inferInsert> = {};
-    
-    if (updateFields.first_name !== undefined) {
-      fieldsToUpdate.first_name = updateFields.first_name;
-    }
-    
-    if (updateFields.last_name !== undefined) {
-      fieldsToUpdate.last_name = updateFields.last_name;
-    }
-    
-    if (updateFields.birth_date !== undefined) {
-      // Convert Date to string for database storage, or keep null
-      fieldsToUpdate.birth_date = updateFields.birth_date ? updateFields.birth_date.toISOString().split('T')[0] : null;
-    }
-    
-    if (updateFields.death_date !== undefined) {
-      // Convert Date to string for database storage, or keep null
-      fieldsToUpdate.death_date = updateFields.death_date ? updateFields.death_date.toISOString().split('T')[0] : null;
-    }
-    
-    if (updateFields.picture_url !== undefined) {
-      fieldsToUpdate.picture_url = updateFields.picture_url;
-    }
-
-    // If no fields to update, return the existing member with converted dates
-    if (Object.keys(fieldsToUpdate).length === 0) {
+    // Allow empty updates - just return the existing record if no fields are provided
+    if (Object.keys(updateData).length === 0) {
+      const existing = await db.select()
+        .from(familyMembersTable)
+        .where(eq(familyMembersTable.id, input.id))
+        .execute();
+      
+      if (existing.length === 0) {
+        return null as any;
+      }
+      
+      const member = existing[0];
       return {
-        ...existingMember[0],
-        birth_date: existingMember[0].birth_date ? new Date(existingMember[0].birth_date) : null,
-        death_date: existingMember[0].death_date ? new Date(existingMember[0].death_date) : null,
-        created_at: new Date(existingMember[0].created_at)
+        ...member,
+        birth_date: member.birth_date ? new Date(member.birth_date) : null,
+        death_date: member.death_date ? new Date(member.death_date) : null,
+        created_at: new Date(member.created_at)
       };
     }
 
-    // Update the family member
+    // Update family member record
     const result = await db.update(familyMembersTable)
-      .set(fieldsToUpdate)
-      .where(eq(familyMembersTable.id, id))
+      .set(updateData)
+      .where(eq(familyMembersTable.id, input.id))
       .returning()
       .execute();
 
-    // Convert date strings back to Date objects
-    const updatedMember = result[0];
+    if (result.length === 0) {
+      return null as any; // Return null for non-existent member
+    }
+
+    // Convert string dates back to Date objects
+    const member = result[0];
     return {
-      ...updatedMember,
-      birth_date: updatedMember.birth_date ? new Date(updatedMember.birth_date) : null,
-      death_date: updatedMember.death_date ? new Date(updatedMember.death_date) : null,
-      created_at: new Date(updatedMember.created_at)
+      ...member,
+      birth_date: member.birth_date ? new Date(member.birth_date) : null,
+      death_date: member.death_date ? new Date(member.death_date) : null,
+      created_at: new Date(member.created_at)
     };
   } catch (error) {
     console.error('Family member update failed:', error);

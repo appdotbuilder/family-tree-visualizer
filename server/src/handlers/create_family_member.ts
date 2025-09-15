@@ -9,18 +9,20 @@ export const createFamilyMember = async (input: CreateFamilyMemberInput): Promis
       .values({
         first_name: input.first_name,
         last_name: input.last_name,
-        birth_date: input.birth_date ? input.birth_date.toISOString().split('T')[0] : null, // Convert Date to date string
-        death_date: input.death_date ? input.death_date.toISOString().split('T')[0] : null, // Convert Date to date string
+        birth_date: input.birth_date ? input.birth_date.toISOString().split('T')[0] : null,
+        death_date: input.death_date ? input.death_date.toISOString().split('T')[0] : null,
         picture_url: input.picture_url
       })
       .returning()
       .execute();
 
-    const familyMember = result[0];
+    // Convert string dates back to Date objects
+    const member = result[0];
     return {
-      ...familyMember,
-      birth_date: familyMember.birth_date ? new Date(familyMember.birth_date) : null, // Convert back to Date
-      death_date: familyMember.death_date ? new Date(familyMember.death_date) : null // Convert back to Date
+      ...member,
+      birth_date: member.birth_date ? new Date(member.birth_date) : null,
+      death_date: member.death_date ? new Date(member.death_date) : null,
+      created_at: new Date(member.created_at)
     };
   } catch (error) {
     console.error('Family member creation failed:', error);

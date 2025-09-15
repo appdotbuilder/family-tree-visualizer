@@ -6,9 +6,10 @@ export const getFamilyMembers = async (): Promise<FamilyMember[]> => {
   try {
     const result = await db.select()
       .from(familyMembersTable)
+      .orderBy(familyMembersTable.created_at)
       .execute();
 
-    // Convert date strings to Date objects and handle nullable fields
+    // Convert string dates back to Date objects
     return result.map(member => ({
       ...member,
       birth_date: member.birth_date ? new Date(member.birth_date) : null,
@@ -16,7 +17,7 @@ export const getFamilyMembers = async (): Promise<FamilyMember[]> => {
       created_at: new Date(member.created_at)
     }));
   } catch (error) {
-    console.error('Failed to fetch family members:', error);
+    console.error('Failed to get family members:', error);
     throw error;
   }
 };

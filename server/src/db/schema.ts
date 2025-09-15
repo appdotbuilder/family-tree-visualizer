@@ -1,4 +1,4 @@
-import { serial, text, pgTable, timestamp, date } from 'drizzle-orm/pg-core';
+import { serial, text, pgTable, timestamp, date, integer } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const familyMembersTable = pgTable('family_members', {
@@ -13,8 +13,8 @@ export const familyMembersTable = pgTable('family_members', {
 
 export const marriagesTable = pgTable('marriages', {
   id: serial('id').primaryKey(),
-  person1_id: serial('person1_id').references(() => familyMembersTable.id).notNull(),
-  person2_id: serial('person2_id').references(() => familyMembersTable.id).notNull(),
+  person1_id: integer('person1_id').references(() => familyMembersTable.id).notNull(),
+  person2_id: integer('person2_id').references(() => familyMembersTable.id).notNull(),
   marriage_date: date('marriage_date'), // Nullable by default
   divorce_date: date('divorce_date'), // Nullable by default
   created_at: timestamp('created_at').defaultNow().notNull(),
@@ -22,8 +22,8 @@ export const marriagesTable = pgTable('marriages', {
 
 export const parentChildTable = pgTable('parent_child', {
   id: serial('id').primaryKey(),
-  parent_id: serial('parent_id').references(() => familyMembersTable.id).notNull(),
-  child_id: serial('child_id').references(() => familyMembersTable.id).notNull(),
+  parent_id: integer('parent_id').references(() => familyMembersTable.id).notNull(),
+  child_id: integer('child_id').references(() => familyMembersTable.id).notNull(),
   created_at: timestamp('created_at').defaultNow().notNull(),
 });
 
