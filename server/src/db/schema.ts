@@ -1,50 +1,63 @@
-import { serial, text, pgTable, timestamp, date, integer } from 'drizzle-orm/pg-core';
+import { serial, text, pgTable, timestamp, date, pgEnum, integer, primaryKey, unique } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
+// Gender enum
+export const genderEnum = pgEnum('gender', ['male', 'female', 'other']);
+
+// Family members table
 export const familyMembersTable = pgTable('family_members', {
   id: serial('id').primaryKey(),
   first_name: text('first_name').notNull(),
   last_name: text('last_name').notNull(),
   birth_date: date('birth_date'), // Nullable by default
-  death_date: date('death_date'), // Nullable by default
-  picture_url: text('picture_url'), // Nullable by default
+  gender: genderEnum('gender'), // Nullable by default
   created_at: timestamp('created_at').defaultNow().notNull(),
 });
 
+// Marriages table
 export const marriagesTable = pgTable('marriages', {
   id: serial('id').primaryKey(),
-  person1_id: integer('person1_id').references(() => familyMembersTable.id).notNull(),
-  person2_id: integer('person2_id').references(() => familyMembersTable.id).notNull(),
+  spouse1_id: integer('spouse1_id').notNull().references(() => familyMembersTable.id, { onDelete: 'cascade' }),
+  spouse2_id: integer('spouse2_id').notNull().references(() => familyMembersTable.id, { onDelete: 'cascade' }),
   marriage_date: date('marriage_date'), // Nullable by default
   divorce_date: date('divorce_date'), // Nullable by default
   created_at: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  // Ensure no duplicate marriages (either direction)
+  uniqueMarriage: unique('unique_marriage').on(table.spouse1_id, table.spouse2_id),
+  // Ensure spouse1_id is always less than spouse2_id to prevent duplicate entries
+  // This will be handled in application logic
+}));
 
-export const parentChildTable = pgTable('parent_child', {
+// Parent-child relationships table
+export const parentChildTable = pgTable('parent_child_relationships', {
   id: serial('id').primaryKey(),
-  parent_id: integer('parent_id').references(() => familyMembersTable.id).notNull(),
-  child_id: integer('child_id').references(() => familyMembersTable.id).notNull(),
+  parent_id: integer('parent_id').notNull().references(() => familyMembersTable.id, { onDelete: 'cascade' }),
+  child_id: integer('child_id').notNull().references(() => familyMembersTable.id, { onDelete: 'cascade' }),
   created_at: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => ({
+  // Ensure no duplicate parent-child relationships
+  uniqueParentChild: unique('unique_parent_child').on(table.parent_id, table.child_id),
+}));
 
-// Define relations for easier querying
+// Relations definitions for Drizzle queries
 export const familyMembersRelations = relations(familyMembersTable, ({ many }) => ({
-  marriagesAsPerson1: many(marriagesTable, { relationName: 'person1_marriages' }),
-  marriagesAsPerson2: many(marriagesTable, { relationName: 'person2_marriages' }),
-  parentRelations: many(parentChildTable, { relationName: 'parent_relations' }),
-  childRelations: many(parentChildTable, { relationName: 'child_relations' }),
+  marriagesAsSpouse1: many(marriagesTable, { relationName: 'spouse1' }),
+  marriagesAsSpouse2: many(marriagesTable, { relationName: 'spouse2' }),
+  asParent: many(parentChildTable, { relationName: 'parent' }),
+  asChild: many(parentChildTable, { relationName: 'child' }),
 }));
 
 export const marriagesRelations = relations(marriagesTable, ({ one }) => ({
-  person1: one(familyMembersTable, {
-    fields: [marriagesTable.person1_id],
+  spouse1: one(familyMembersTable, {
+    fields: [marriagesTable.spouse1_id],
     references: [familyMembersTable.id],
-    relationName: 'person1_marriages',
+    relationName: 'spouse1',
   }),
-  person2: one(familyMembersTable, {
-    fields: [marriagesTable.person2_id],
+  spouse2: one(familyMembersTable, {
+    fields: [marriagesTable.spouse2_id],
     references: [familyMembersTable.id],
-    relationName: 'person2_marriages',
+    relationName: 'spouse2',
   }),
 }));
 
@@ -52,26 +65,28 @@ export const parentChildRelations = relations(parentChildTable, ({ one }) => ({
   parent: one(familyMembersTable, {
     fields: [parentChildTable.parent_id],
     references: [familyMembersTable.id],
-    relationName: 'parent_relations',
+    relationName: 'parent',
   }),
   child: one(familyMembersTable, {
     fields: [parentChildTable.child_id],
     references: [familyMembersTable.id],
-    relationName: 'child_relations',
+    relationName: 'child',
   }),
 }));
 
 // TypeScript types for the table schemas
 export type FamilyMember = typeof familyMembersTable.$inferSelect;
 export type NewFamilyMember = typeof familyMembersTable.$inferInsert;
+
 export type Marriage = typeof marriagesTable.$inferSelect;
 export type NewMarriage = typeof marriagesTable.$inferInsert;
+
 export type ParentChild = typeof parentChildTable.$inferSelect;
 export type NewParentChild = typeof parentChildTable.$inferInsert;
 
-// Export all tables and relations for proper query building
-export const tables = { 
+// Export all tables for proper query building
+export const tables = {
   familyMembers: familyMembersTable,
   marriages: marriagesTable,
-  parentChild: parentChildTable
+  parentChild: parentChildTable,
 };
